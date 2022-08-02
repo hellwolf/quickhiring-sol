@@ -45,7 +45,7 @@ contract QuicksortContest {
     uint public constant SAMPLE_LIMIT = 500;
 
     // no spam, bust it!
-    uint public constant ENTRANCE_FEE = 10e18;
+    uint public constant ENTRANCE_FEE = 0.01e18;
 
     // time is limited!
     uint public constant CONTEST_PERIOD = 2 weeks;
@@ -107,6 +107,7 @@ contract QuicksortContest {
 
     // qualify your program, having a small fee to prevent spams
     function qualify(IQuicksort program) external payable {
+        require(msg.value >= ENTRANCE_FEE);
         assert (contestants.length > 0);
         require(block.timestamp < END_DATE, "Contest ended!");
         bool success;
@@ -301,5 +302,18 @@ contract SuccinctQuicksort is IQuicksort {
 
     function quicksort(uint256[] calldata input) public override pure returns (uint256[] memory result) {
         result = _quicksortHelper(input, 0, input.length);
+    }
+}
+
+contract CheatSort /* is IQuicksort, no longer pure */ {
+
+    uint256[] private _cheatSeq;
+
+    constructor(QuicksortContest contest) {
+        _cheatSeq = contest.baseline().quicksort(contest.getInput());
+    }
+
+    function quicksort(uint256[] calldata) public view returns (uint256[] memory) {
+        return _cheatSeq;
     }
 }
