@@ -149,6 +149,8 @@ contract QuicksortContest {
         require(!success, "Not busted!");
         emit Busted(top.applicant, address(top.program), counterExample);
         contestants.pop();
+        // reward for busting
+        payable(msg.sender).transfer(ENTRANCE_FEE);
     }
 
     // bust the current topGun automatically with a counter case!
