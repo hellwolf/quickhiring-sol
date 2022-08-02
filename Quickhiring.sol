@@ -145,13 +145,10 @@ contract QuicksortContest {
         require(block.timestamp < END_DATE + CHALLENGE_PERIOD, "Challenge period ended!");
         require(counterExample.length < SAMPLE_LIMIT, "Unfair difficult challenge");
         Contestant memory top = topGun();
-        bool success;
-        (success,,) = testWithInput(counterExample, top.program);
-        if (!success) {
-            // busted!
-            emit Busted(top.applicant, address(top.program), counterExample);
-            contestants.pop();
-        }
+        (bool success,,) = testWithInput(counterExample, top.program);
+        require(!success, "Not busted!");
+        emit Busted(top.applicant, address(top.program), counterExample);
+        contestants.pop();
     }
 
     // bust the current topGun automatically with a counter case!
