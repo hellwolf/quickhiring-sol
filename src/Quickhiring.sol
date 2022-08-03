@@ -2,8 +2,8 @@
 
 pragma solidity >=0.8.15;
 
-interface IQuicksort {
-    function quicksort(uint256[] calldata input) external pure returns (uint256[] memory result);
+interface ISortProgram {
+    function sort(uint256[] calldata input) external view returns (uint256[] memory result);
 }
 
 interface IERC20 {
@@ -11,7 +11,7 @@ interface IERC20 {
     function transfer(address recipient, uint256 amount) external returns (bool);
 }
 
-// Hiring process with a quicksort contest
+// Sorting Program Contest:
 //
 // Objective: the most gas efficient pure sorting function
 // Rules:
@@ -20,6 +20,7 @@ interface IERC20 {
 // - There is an entrance fee of `ENTRANCE_FEE` for the qualification.
 // - The program that uses less gas than the previous program is the new "top gun".
 //   - There is a gas limit of `GAS_LIMIT` of how much gas the sorting function can use.
+//   - The gas improvement has to be at least more than `MINIMUM_GAS_IMPROVEMENT`, due to gas measurement inaccuracy
 // - The test input for the program is always the same.
 // - The contest starts with a baseline pure recursive succinct quicksort algorithm as the "top gun".
 // - The top gun can be challenged with a counter example, to prevent spams of any non general solutions.
@@ -30,9 +31,9 @@ interface IERC20 {
 // - After the `CHALLENGE_PERIOD`, the top gun application can collect both coins and erc20 tokens in the contract.
 // Note:
 // - There are myriads of view functions for testing purpose, read the source code!
-contract QuicksortContest {
+contract SortProgramContest {
 
-    // baseline quicksort
+    // baseline sort
     SuccinctQuicksort public baseline = new SuccinctQuicksort();
 
     // to generate new sequence: `$ for i in `seq $(( 100 * 32 ))`;do printf '\\x%0x' $(( $RANDOM % 256 ));done`
@@ -40,6 +41,8 @@ contract QuicksortContest {
 
     // if you burn more gas than this, I don't know what are you doing with your life!
     uint public constant GAS_LIMIT = 4e6;
+
+    uint public constant MINIMUM_GAS_IMPROVEMENT = 10e3;
 
     // let's prevent challenge from unfair difficult problems.
     uint public constant SAMPLE_LIMIT = 500;
@@ -67,7 +70,7 @@ contract QuicksortContest {
 
     struct Contestant {
         address applicant;
-        IQuicksort program;
+        ISortProgram program;
         uint256 gasUsed;
     }
 
@@ -79,40 +82,46 @@ contract QuicksortContest {
 
     function numContestants() external  view returns (uint) { return contestants.length; }
 
-    // marvelous 
+    // marvelous
     function topGun() public view returns (Contestant memory) {
         return contestants[contestants.length - 1];
     }
 
     // test your program before qualifying
     // - reason 0: wrong result, reason 1: out of gas
-    function testWithInput(uint256[] memory input, IQuicksort program) public view
+    function validateProgramWithInput(uint256[] memory input, ISortProgram program) public view
         returns (bool success, uint reason, uint gasUsed)
     {
         uint256 startGas = gasleft();
-        try program.quicksort{ gas: GAS_LIMIT }(input) returns (uint256[] memory result) {
-            success = _validate(input, result);
-            gasUsed = startGas - gasleft();
+        try program.sort{ gas: GAS_LIMIT }(input) returns (uint256[] memory result) {
+            uint256 endGas = gasleft();
+            gasUsed = startGas - endGas;
+            // NOTE!!
+            // we ignore the difference under MINIMUM_GAS_IMPROVEMENT, so that subsequent application of the
+            // same program would not likely qualify, not perfect solution...
+            gasUsed /= MINIMUM_GAS_IMPROVEMENT;
+            gasUsed *= MINIMUM_GAS_IMPROVEMENT;
+            success = _validateResult(input, result);
         } catch {
             success = false;
             reason = 1;
         }
     }
 
-    function test(IQuicksort program) public view
+    function validateProgram(ISortProgram program) public view
         returns (bool success, uint reason, uint gasUsed)
     {
-        return testWithInput(getInput(), program);
+        return validateProgramWithInput(getInput(), program);
     }
 
     // qualify your program, having a small fee to prevent spams
-    function qualify(IQuicksort program) external payable {
+    function qualify(ISortProgram program) external payable {
         require(msg.value >= ENTRANCE_FEE);
         assert (contestants.length > 0);
         require(block.timestamp < END_DATE, "Contest ended!");
         bool success;
         uint gasUsed;
-        (success, , gasUsed) = test(program);
+        (success, , gasUsed) = validateProgram(program);
         require(success, "Your program failed!");
         require(gasUsed < topGun().gasUsed, "Your program used more gas than the top gun!");
         contestants.push(Contestant({
@@ -129,14 +138,14 @@ contract QuicksortContest {
         example = new uint256[](n);
         for (uint i = 0; i < n; ++i) example[i] = _random(i);
         bool success;
-        (success,,) = testWithInput(example, top.program);
+        (success,,) = validateProgramWithInput(example, top.program);
         busted = !success;
     }
 
     // try to bust with random samples
     function tryBust() external view returns (uint256[] memory example, bool busted) {
-        // 10 to 20 elements
-        uint n = _random(0) % 10 + 10;
+        // 50 to 100 elements
+        uint n = _random(0) % 50 + 50;
         return tryBust(n);
     }
 
@@ -146,7 +155,7 @@ contract QuicksortContest {
         require(block.timestamp < END_DATE + CHALLENGE_PERIOD, "Challenge period ended!");
         require(counterExample.length < SAMPLE_LIMIT, "Unfair difficult challenge");
         Contestant memory top = topGun();
-        (bool success,,) = testWithInput(counterExample, top.program);
+        (bool success,,) = validateProgramWithInput(counterExample, top.program);
         require(!success, "Not busted!");
         emit Busted(top.applicant, address(top.program), counterExample);
         contestants.pop();
@@ -164,14 +173,14 @@ contract QuicksortContest {
     }
 
     function collectNativeCoin() external {
-        require(block.timestamp > END_DATE + CHALLENGE_PERIOD, "Until challenge period finishes!");
+        require(block.timestamp >= END_DATE + CHALLENGE_PERIOD, "Until challenge period finishes!");
         Contestant memory top = topGun();
         require(top.applicant == msg.sender, "Don't be a bad loser!");
         payable(top.applicant).transfer(address(this).balance);
     }
 
     function collectERC20(IERC20 token) external {
-        require(block.timestamp > END_DATE + CHALLENGE_PERIOD, "Until challenge period finishes!");
+        require(block.timestamp >= END_DATE + CHALLENGE_PERIOD, "Until challenge period finishes!");
         Contestant memory top = topGun();
         require(top.applicant == msg.sender, "Don't be a bad loser!");
         token.transfer(msg.sender, token.balanceOf(address(this)));
@@ -188,7 +197,8 @@ contract QuicksortContest {
     // don't try this with remix js simulation, it will burn your browser
     function selfTest1() public view returns (uint256[] memory input, uint256[] memory result) {
         input = getInput();
-        result = baseline.quicksort(input);
+        result = baseline.sort(input);
+        _validateResult(input, result);
     }
 
     // try this instead of selfTest1
@@ -204,7 +214,8 @@ contract QuicksortContest {
         input[7] = 39;
         input[8] = 56;
         input[9] = 21;
-        result = baseline.quicksort(input);
+        result = baseline.sort(input);
+        _validateResult(input, result);
     }
 
 
@@ -213,8 +224,8 @@ contract QuicksortContest {
         return randomHash;
     }
 
-    function _validate(uint256[] memory input, uint256[] memory result) internal view returns (bool) {
-        uint256[] memory correctRersult = baseline.quicksort(input);
+    function _validateResult(uint256[] memory input, uint256[] memory result) internal view returns (bool) {
+        uint256[] memory correctRersult = baseline.sort(input);
         if (input.length != result.length) return false;
         for (uint i = 0; i < input.length; ++i) {
             if (correctRersult[i] != result[i]) return false;
@@ -269,11 +280,11 @@ contract QuicksortContest {
 }
 
 // no assembly no magic, pure gas burner
-contract SuccinctQuicksort is IQuicksort {
-    function _quicksortHelper(uint256[] memory input, uint start, uint len)
+contract SuccinctQuicksort is ISortProgram {
+    function _sortHelper(uint256[] memory input, uint start, uint len)
         internal pure returns (uint256[] memory result)
     {
-        result = new uint256[](len); 
+        result = new uint256[](len);
 
         // trivial cases
         if (len == 0) return result;
@@ -293,27 +304,27 @@ contract SuccinctQuicksort is IQuicksort {
 
         // combining result
         result[j] = pivotVal;
-        uint256[] memory smallerSorted = _quicksortHelper(result, 0, j);
-        uint256[] memory biggerSorted =  _quicksortHelper(result, j + 1, k);
+        uint256[] memory smallerSorted = _sortHelper(result, 0, j);
+        uint256[] memory biggerSorted =  _sortHelper(result, j + 1, k);
         for (uint i = 0; i < j; ++i) result[i] = smallerSorted[i];
         for (uint i = 0; i < k; ++i) result[j + 1 + i] = biggerSorted[i];
         return result;
     }
 
-    function quicksort(uint256[] calldata input) public override pure returns (uint256[] memory result) {
-        result = _quicksortHelper(input, 0, input.length);
+    function sort(uint256[] calldata input) public override pure returns (uint256[] memory result) {
+        result = _sortHelper(input, 0, input.length);
     }
 }
 
-contract CheatSort /* is IQuicksort, no longer pure */ {
+contract CheatSort is ISortProgram {
 
     uint256[] private _cheatSeq;
 
-    constructor(QuicksortContest contest) {
-        _cheatSeq = contest.baseline().quicksort(contest.getInput());
+    constructor(SortProgramContest contest) {
+        _cheatSeq = contest.baseline().sort(contest.getInput());
     }
 
-    function quicksort(uint256[] calldata) public view returns (uint256[] memory) {
+    function sort(uint256[] calldata) public view returns (uint256[] memory) {
         return _cheatSeq;
     }
 }
