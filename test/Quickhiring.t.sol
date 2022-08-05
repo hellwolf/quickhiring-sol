@@ -46,9 +46,12 @@ contract QuickhiringTest is Test {
         // use xor to validate result efficiently
         uint256 a;
         uint256 b;
+        uint256 min;
         for (uint i = 0; i < input.length; ++i) {
             a ^= input[i];
             b ^= result[i];
+            assertTrue(result[i] >= min);
+            min = result[i];
         }
         assertEq(a, b);
     }

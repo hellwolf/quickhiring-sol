@@ -295,10 +295,11 @@ contract SuccinctQuicksort is ISortProgram {
         uint k;
         uint256 pivotVal = input[start];
         for (uint i = 1; i < len; ++i) {
-            if (input[i] <= pivotVal) {
-                result[j++] = input[start + i];
+            uint256 val = input[start + i];
+            if (val <= pivotVal) {
+                result[j++] = val;
             } else {
-                result[len - 1 - k++] = input[start + i];
+                result[len - 1 - k++] = val;
             }
         }
 
