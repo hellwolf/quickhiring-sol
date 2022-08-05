@@ -39,6 +39,20 @@ contract QuickhiringTest is Test {
         t.collectERC20(IERC20(address(0)));
     }
 
+    function testSuccinctQuicksort(uint256[] memory input) public {
+        vm.assume(input.length < 100);
+        uint256[] memory result = t.baseline().sort(input);
+        assertEq(result.length, input.length);
+        // use xor to validate result efficiently
+        uint256 a;
+        uint256 b;
+        for (uint i = 0; i < input.length; ++i) {
+            a ^= input[i];
+            b ^= result[i];
+        }
+        assertEq(a, b);
+    }
+
     function testBaselineProgram() public {
         t.qualify{ value: ENTRANCE_FEE } (baseline);
         assertEq(address(t).balance, t.ENTRANCE_FEE());
