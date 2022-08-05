@@ -43,13 +43,14 @@ contract QuickhiringTest is Test {
         vm.assume(input.length < 100);
         uint256[] memory result = t.baseline().sort(input);
         assertEq(result.length, input.length);
-        // use xor to validate result efficiently
+        // use xor to validate result having all input elements efficiently
         uint256 a;
         uint256 b;
         uint256 min;
         for (uint i = 0; i < input.length; ++i) {
             a ^= input[i];
             b ^= result[i];
+            // test the sorting order
             assertTrue(result[i] >= min);
             min = result[i];
         }
